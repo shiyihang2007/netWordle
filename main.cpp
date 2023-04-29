@@ -125,7 +125,9 @@ int clientProcessData(const char *data, int len)
 	}
 	else if (data[0] == '[' && data[1] == 'H' && data[2] == ']') {
 		std::string tmp = std::string(data);
-        tmp.erase(tmp.find('[', 4));
+        if (tmp.find('[', 4) != tmp.npos) {
+            tmp.erase(tmp.find('[', 4));
+        }
         guessWord.push_back(tmp.substr(4));
     }
     else if (data[0] == '[' && data[1] == 'E' && data[2] == ']') {
@@ -141,6 +143,10 @@ int clientProcessData(const char *data, int len)
 		for (int i = 0; i < now; ++i) {
 			keyWord.push_back('_');
 		}
+    }
+    else if (data[0] == '[' && data[1] == 'N' && data[2] == ']') {
+        winFlg = 1;
+        return 4;
     }
     else {
         std::cerr << "[W] Unknown data from server" << std::endl;
@@ -295,6 +301,7 @@ void clientDisplay()
 #ifdef linux
 	system("clear");
 #endif
+    std::cout << "单词长度 " << keyWord.size() << std::endl;
     std::cout << "历史查询: " << std::endl;
     for (std::string i : guessWord) {
         std::cout << i << '\n';
@@ -375,7 +382,9 @@ int main()
                         std::cout << "什么事都没有发生" << std::endl;
                     }
                     else if (guess == "=") {
-                        std::cout << "当前信息" << std::endl;
+                        if (net.networkClientConnect() == -1) {
+                            break;
+                        }
                         net.networkClientSendStr("[R] ", 4);
                         int recvState = 0;
                         while (recvState != 4 && !winFlg) {
