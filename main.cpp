@@ -113,9 +113,6 @@ void skipKey()
 #endif
 }
 
-std::set<int> wrongPosition[27],
-	acceptedPosition[27];
-bool unused[27];
 std::string keyWord;
 int winFlg;
 std::vector<std::string> guessWord;
@@ -128,27 +125,28 @@ int clientProcessData(const char *data, int len)
 	}
 	else if (data[0] == '[' && data[1] == 'H' && data[2] == ']') {
 		std::string tmp = std::string(data);
-		guessWord.push_back(tmp.substr(4));
-	}
-	else if (data[0] == '[' && data[1] == 'E' && data[2] == ']') {
-		// std::cerr << "[D] Data ended." << std::endl;
-		return 4;
-	}
-	else if (data[0] == '[' && data[1] == 'L' && data[2] == ']') {
-		int cnt = 4, now = 0;
-		while (cnt < len && data[cnt] != '\0') {
+        tmp.erase(tmp.find('[', 4));
+        guessWord.push_back(tmp.substr(4));
+    }
+    else if (data[0] == '[' && data[1] == 'E' && data[2] == ']') {
+        // std::cerr << "[D] Data ended." << std::endl;
+        return 4;
+    }
+    else if (data[0] == '[' && data[1] == 'L' && data[2] == ']') {
+        int cnt = 4, now = 0;
+        while (cnt < len && data[cnt] != '\0') {
 			now = now * 10 + data[cnt++] - '0';
 		}
 		keyWord = "";
 		for (int i = 0; i < now; ++i) {
 			keyWord.push_back('_');
 		}
-	}
-	else {
-		std::cerr << "[W] Unknown data from server" << std::endl;
+    }
+    else {
+        std::cerr << "[W] Unknown data from server" << std::endl;
 		std::cerr << "[D] Data: " << data << std::endl;
-	}
-	return 0;
+    }
+    return 0;
 }
 
 int clientProcess(network &net)
@@ -297,9 +295,14 @@ void clientDisplay()
 #ifdef linux
 	system("clear");
 #endif
-	for (std::string i : guessWord) {
-		std::cout << i << '\n';
-	}
+    std::cout << "历史查询: " << std::endl;
+    for (std::string i : guessWord) {
+        std::cout << i << '\n';
+    }
+    if (guessWord.size() == 0) {
+        std::cout << " 空空如也" << std::endl;
+    }
+    std::cout << "---------" << std::endl;
 }
 
 int main()
@@ -346,76 +349,61 @@ int main()
 			std::cout << "加入对局" << std::endl;
 			std::cout << "Wordle 长度 " << keyWord.size() << std::endl;
 			std::cout << "按下任意键以开始输入" << std::endl;
-			winFlg = 0;
-			int nowTime = clock();
-			int lstRefreshTime = nowTime;
-			double refreshPerSec = 0.3;
-			clientDisplay();
-			while (!winFlg) {
-				nowTime = clock();
-				if (keyPressed()) {
-					skipKey();
-					std::string guess = "";
-					while (guess.size() != keyWord.size()) {
-						std::cout << "输入-跳过" << std::endl;
-						std::cout << "输入=刷新" << std::endl;
-						std::cout << "其他输入 进行查询" << std::endl;
-						std::cout << "> ";
-						std::cin >> guess;
-						if (guess == "-") {
-							break;
-						}
-						if (guess == "=") {
-							break;
-						}
-						if (guess.size() != keyWord.size()) {
-							std::cout << "单词长度必须为 " << keyWord.size() << std::endl;
-						}
-					}
-					if (guess == "-") {
-						std::cout << "什么事都没有发生" << std::endl;
-					}
-					else if (guess == "=") {
-						std::cout << "当前信息" << std::endl;
-						clientDisplay();
-					}
-					else {
-						for (int i = 0; i < (int)guess.size(); ++i) {
-							if (guess[i] >= 'a' && guess[i] <= 'z') {
-								guess[i] -= 32;
-							}
-							unused[guess[i] - 'A'] = 0;
-						}
-						guess = "[G] " + guess;
-						if (net.networkClientConnect() == -1) {
-							break;
-						}
-						net.networkClientSendStr(guess.c_str(), guess.size());
-						int recvState = 0;
-						while (recvState != 4 && !winFlg) {
-							recvState = clientProcess(net);
-						}
-						clientDisplay();
-					}
-					std::cout << "---------" << std::endl;
-				}
-				else {
-					if (nowTime - lstRefreshTime > CLOCKS_PER_SEC * 1.0 / refreshPerSec) {
-						// std::cerr << "[D] 请求服务器刷新" << std::endl;
-						if (net.networkClientConnect() == -1) {
-							break;
-						}
-						net.networkClientSendStr("[R] ", 4);
-						int recvState = 0;
-						while (recvState != 4 && !winFlg) {
-							recvState = clientProcess(net);
-						}
-						lstRefreshTime = nowTime;
-					}
-				}
-				Sleep(100);
-			}
-			if (winFlg == 1) {
+            winFlg = 0;
+            clientDisplay();
+            while (!winFlg) {
+                if (keyPressed()) {
+                    skipKey();
+                    std::string guess = "";
+                    while (guess.size() != keyWord.size()) {
+                        std::cout << "输入-跳过" << std::endl;
+                        std::cout << "输入=刷新" << std::endl;
+                        std::cout << "其他输入 进行查询" << std::endl;
+                        std::cout << "> ";
+                        std::cin >> guess;
+                        if (guess == "-") {
+                            break;
+                        }
+                        if (guess == "=") {
+                            break;
+                        }
+                        if (guess.size() != keyWord.size()) {
+                            std::cout << "单词长度必须为 " << keyWord.size() << std::endl;
+                        }
+                    }
+                    if (guess == "-") {
+                        std::cout << "什么事都没有发生" << std::endl;
+                    }
+                    else if (guess == "=") {
+                        std::cout << "当前信息" << std::endl;
+                        net.networkClientSendStr("[R] ", 4);
+                        int recvState = 0;
+                        while (recvState != 4 && !winFlg) {
+                            recvState = clientProcess(net);
+                        }
+                        clientDisplay();
+                    }
+                    else {
+                        for (int i = 0; i < (int)guess.size(); ++i) {
+                            if (guess[i] >= 'a' && guess[i] <= 'z') {
+                                guess[i] -= 32;
+                            }
+                        }
+                        guess = "[G] " + guess;
+                        if (net.networkClientConnect() == -1) {
+                            break;
+                        }
+                        net.networkClientSendStr(guess.c_str(), guess.size());
+                        int recvState = 0;
+                        while (recvState != 4 && !winFlg) {
+                            recvState = clientProcess(net);
+                        }
+                        clientDisplay();
+                    }
+                }
+                Sleep(100);
+            }
+            if (winFlg == 1) {
 				std::cout << "正确答案 " << keyWord << std::endl;
 			}
 			else {
@@ -449,28 +437,23 @@ int main()
 				if (keyWord[i] >= 'a' && keyWord[i] <= 'z') {
 					keyWord[i] -= 32;
 				}
-			}
-			for (int i = 0; i < 27; ++i) {
-				wrongPosition[i].clear();
-				acceptedPosition[i].clear();
-				unused[i] = 1;
-			}
-			while (!winFlg) {
-				std::cout << "等待客户端数据..." << std::endl;
-				SOCKET tmp;
-				sockaddr_in addr;
-				serverProcess(net, tmp, addr);
-				net.networkServerClose(tmp);
-				std::cout << "数据发送完毕, 连接已断开" << std::endl;
+            }
+            while (!winFlg) {
+                std::cout << "等待客户端数据..." << std::endl;
+                SOCKET tmp;
+                sockaddr_in addr;
+                serverProcess(net, tmp, addr);
+                net.networkServerClose(tmp);
+                std::cout << "数据发送完毕, 连接已断开" << std::endl;
 				if (winFlg != 0) {
 					++winFlg;
 				}
 				Sleep(10);
-			}
-		}
-		std::cout << "本巡结束" << std::endl;
-		std::cout << "---------" << std::endl;
-		std::cout << "下一回合" << std::endl;
-	}
-	return 0;
+            }
+        }
+        std::cout << "本巡结束" << std::endl;
+        std::cout << "---------" << std::endl;
+        std::cout << "下一回合" << std::endl;
+    }
+    return 0;
 }
