@@ -1,14 +1,23 @@
+#ifndef UNICODE
 #define UNICODE
+#endif
+#ifndef _UNICODE
 #define _UNICODE
+#endif
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <fstream>
 #include <iostream>
 #include <map>
+#include <random>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "network.hpp"
 
@@ -25,6 +34,10 @@ int state;
 
 #ifdef linux
 #define Sleep(x) sleep((x) / (1000.0))
+#endif
+#ifdef _WIN32
+HANDLE hConIn;
+HANDLE hConOut;
 #endif
 
 int GetLocalIP(std::string &local_ip)
@@ -111,47 +124,22 @@ void skipKey()
 #endif
 }
 
-std::set<int> wrongPosition[27],
-    acceptedPosition[27];
-bool unused[27];
 std::string keyWord;
 int winFlg;
+std::vector<std::string> guessWord;
 
 int clientProcessData(const char *data, int len)
 {
     // 客户端信息处理
-    if (data[0] == '[' && data[1] == 'U' && data[2] == ']') {
-        // std::cerr << "[D] Unused. " << std::endl;
-        for (int i = 0; i < 26; ++i) {
-            unused[i] = 0;
-        }
-        for (int cnt = 4; cnt < len && data[cnt] != '\0' && data[cnt] >= 'A' && data[cnt] <= 'Z'; ++cnt) {
-            unused[data[cnt] - 'A'] = 1;
-        }
+    if (data[0] == '[' && data[1] == 'C' && data[2] == ']') {
+        std::vector<std::string>().swap(guessWord);
     }
-    else if (data[0] == '[' && data[1] == 'A' && data[2] == ']') {
-        int cnt = 5, now = 0;
-        while (cnt < len && data[cnt] != '\0') {
-            now = now * 10 + data[cnt++] - '0';
+    else if (data[0] == '[' && data[1] == 'H' && data[2] == ']') {
+        std::string tmp = std::string(data);
+        if (tmp.find('[', 4) != tmp.npos) {
+            tmp.erase(tmp.find('[', 4));
         }
-        // std::cerr << "[D] AC. " << data[4] << " " << now << std::endl;
-        acceptedPosition[data[4] - 'A'].insert(now);
-    }
-    else if (data[0] == '[' && data[1] == 'W' && data[2] == ']') {
-        int cnt = 5, now = 0;
-        while (cnt < len && data[cnt] != '\0') {
-            now = now * 10 + data[cnt++] - '0';
-        }
-        // std::cerr << "[D] WA. " << data[4] << " " << now << std::endl;
-        wrongPosition[data[4] - 'A'].insert(now);
-    }
-    else if (data[0] == '[' && data[1] == 'N' && data[2] == ']') {
-        // std::cerr << "[D] Win. " << std::endl;
-        char keyWordc[255];
-        strcpy(keyWordc, data + 4);
-        keyWord = keyWordc;
-        keyWord = keyWord.substr(0, len - 4);
-        winFlg = 1;
+        guessWord.push_back(tmp.substr(4));
     }
     else if (data[0] == '[' && data[1] == 'E' && data[2] == ']') {
         // std::cerr << "[D] Data ended." << std::endl;
@@ -166,6 +154,11 @@ int clientProcessData(const char *data, int len)
         for (int i = 0; i < now; ++i) {
             keyWord.push_back('_');
         }
+    }
+    else if (data[0] == '[' && data[1] == 'N' && data[2] == ']') {
+        winFlg = 1;
+        keyWord = std::string(data + 3);
+        return 4;
     }
     else {
         std::cerr << "[W] Unknown data from server" << std::endl;
@@ -228,25 +221,9 @@ int serverProcess(network &net, SOCKET &sserverL, sockaddr_in &addr)
             std::string res = "[L] " + std::to_string(keyWord.size());
             net.networkServerSendStr(sserverL, res.c_str(), res.size());
         }
-        for (int i = 0; i < 26; ++i) {
-            for (auto pos : acceptedPosition[i]) {
-                std::string res = ((std::string) "[A] " + (char)(i + 'A') + " " + std::to_string(pos));
-                net.networkServerSendStr(sserverL, res.c_str(), res.size());
-            }
-            for (auto pos : wrongPosition[i]) {
-                std::string res = ((std::string) "[W] " + (char)(i + 'A') + " " + std::to_string(pos));
-                net.networkServerSendStr(sserverL, res.c_str(), res.size());
-            }
-        }
-        {
-            std::string res = "[U] ";
-            for (int i = 0; i < 26; ++i) {
-                if (unused[i]) {
-                    res += (char)i + 'A';
-                }
-            }
-            net.networkServerSendStr(sserverL, res.c_str(), res.size());
-        }
+        net.networkServerSendStr(sserverL, "[C] ", 4);
+        for (std::string i : guessWord)
+            net.networkServerSendStr(sserverL, ("[H] " + i).c_str(), i.size() + 4);
         net.networkServerSendStr(sserverL, "[E] ", 4);
         return 1;
     }
@@ -257,7 +234,7 @@ int serverProcess(network &net, SOCKET &sserverL, sockaddr_in &addr)
         std::cerr << guess << std::endl;
         std::string sguess(guess);
         for (int i = 0; i < (int)sguess.size(); ++i) {
-            if (sguess[i] >= 'a' && sguess[i] <= 'z') {
+            if (islower(sguess[i])) {
                 sguess[i] -= 32;
             }
         }
@@ -269,59 +246,46 @@ int serverProcess(network &net, SOCKET &sserverL, sockaddr_in &addr)
             return 4;
         }
         // 返回正确和错误位置
-        int tcnt = 0;
-        for (auto ch : sguess) {
-            ++tcnt;
-            unused[ch - 'A'] = 0;
-            if (keyWord.find(ch) != keyWord.npos) {
-                std::cerr << "[D] found " << ch << " in " << keyWord << std::endl;
-                if ((int)keyWord.find(ch, tcnt - 1) == tcnt - 1) {
-                    std::cerr << "[D] Accepted. " << std::endl;
-                    std::string res = ((std::string) "[A] " + ch + std::to_string(tcnt));
-                    net.networkServerSendStr(sserverL, res.c_str(), res.size());
-                    acceptedPosition[ch - 'A'].insert(tcnt);
-                }
-                else {
-                    std::cerr << "[D] Wrong. " << std::endl;
-                    std::string res = ((std::string) "[W] " + ch + std::to_string(tcnt));
-                    net.networkServerSendStr(sserverL, res.c_str(), res.size());
-                    wrongPosition[ch - 'A'].insert(tcnt);
+        {
+            std::vector<int> state(sguess.size(), 0);
+            std::vector<bool> matched(sguess.size(), false);
+            for (int i = 0; i < (int)sguess.size(); i++)
+                if (sguess[i] == keyWord[i])
+                    state[i] = 2, matched[i] = true;
+            for (int i = 0; i < (int)sguess.size(); i++) {
+                if (state[i] == 0) {
+                    for (int j = 0; j < (int)keyWord.size(); j++) {
+                        if (matched[j] == false && sguess[i] == keyWord[j]) {
+                            state[i] = 1;
+                            matched[j] = true;
+                            break;
+                        }
+                    }
                 }
             }
+            std::string res(sguess.size() * 2, ' ');
+            for (int i = 0; i < (int)sguess.size(); i++) {
+                res[i * 2] = sguess[i];
+                if (state[i] == 0)
+                    res[i * 2 + 1] = '*';
+                else if (state[i] == 1)
+                    res[i * 2 + 1] = '?';
+                else
+                    res[i * 2 + 1] = '+';
+            }
+            guessWord.push_back(res);
+            net.networkServerSendStr(sserverL, "[C] ", 4);
+            for (std::string i : guessWord)
+                net.networkServerSendStr(sserverL, ("[H] " + i).c_str(), i.size() + 4);
         }
         net.networkServerSendStr(sserverL, "[E] ", 4);
         return 2;
     }
     else if (data[0] == '[' && data[1] == 'R' && data[2] == ']') {
         std::cerr << "[I] send data to player from " << inet_ntoa(addr.sin_addr) << std::endl;
-        {
-            std::string res = "[L] " + std::to_string(keyWord.size());
-            net.networkServerSendStr(sserverL, res.c_str(), res.size());
-        }
-        for (int i = 0; i < 26; ++i) {
-            for (auto pos : acceptedPosition[i]) {
-                std::string res = ((std::string) "[A] " + (char)(i + 'A') + std::to_string(pos));
-                net.networkServerSendStr(sserverL, res.c_str(), res.size());
-            }
-            for (auto pos : wrongPosition[i]) {
-                std::string res = ((std::string) "[W] " + (char)(i + 'A') + std::to_string(pos));
-                net.networkServerSendStr(sserverL, res.c_str(), res.size());
-            }
-        }
-        {
-            std::string res = "[U] ";
-            for (int i = 0; i < 26; ++i) {
-                if (unused[i]) {
-                    res += (char)i + 'A';
-                }
-            }
-            net.networkServerSendStr(sserverL, res.c_str(), res.size());
-        }
-        if (winFlg) {
-            std::string res = ((std::string) "[N] " + keyWord);
-            net.networkServerSendStr(sserverL, res.c_str(), res.size());
-            winFlg += 10;
-        }
+        net.networkServerSendStr(sserverL, "[C] ", 4);
+        for (std::string i : guessWord)
+            net.networkServerSendStr(sserverL, ("[H] " + i).c_str(), i.size() + 4);
         net.networkServerSendStr(sserverL, "[E] ", 4);
         return 3;
     }
@@ -347,50 +311,72 @@ bool operator<(const sockaddr_in &x, const sockaddr_in &y)
 void clientDisplay()
 {
     // 客户端显示消息
-    for (int i = 0; i < 26; ++i) {
-        std::cout << (char)('A' + i) << ": " << std::endl;
-        if (unused[i]) {
-            std::cout << " 未曾查询" << std::endl;
-        }
-        else if (acceptedPosition[i].size() + wrongPosition[i].size() > 0) {
-            // std::cout << " 已知位置: ";
-            // for (auto pos : acceptedPosition[i]) {
-            //     std::cout << pos << " ";
-            // }
-            // std::cout << std::endl;
-            // std::cout << " 错误位置: ";
-            // for (auto pos : wrongPosition[i]) {
-            //     std::cout << pos << " ";
-            // }
-            // std::cout << std::endl;
-            for (int j = 1; j <= (int)keyWord.size(); ++j) {
-                std::cout << j << " ";
+#ifdef _WIN32
+    system("cls");
+    std::cout << "单词长度 " << keyWord.size() << std::endl;
+    std::cout << "历史查询: " << std::endl;
+    for (std::string i : guessWord) {
+        for (int k = 0; k < (int)i.size(); k += 2) {
+            if (i[k + 1] == '+') {
+                SetConsoleTextAttribute(hConOut, BACKGROUND_GREEN | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+                // std::cerr << "+";
             }
-            std::cout << std::endl;
-            for (int j = 1; j <= (int)keyWord.size(); ++j) {
-                if (acceptedPosition[i].find(j) != acceptedPosition[i].end()) {
-                    std::cout << "Y ";
-                }
-                else if (wrongPosition[i].find(j) != wrongPosition[i].end()) {
-                    std::cout << "W ";
-                }
-                else {
-                    std::cout << "? ";
-                }
+            else if (i[k + 1] == '?') {
+                SetConsoleTextAttribute(hConOut, BACKGROUND_RED | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+                // std::cerr << "?";
             }
-            std::cout << std::endl;
+            else {
+                SetConsoleTextAttribute(hConOut, BACKGROUND_INTENSITY | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+                // std::cerr << "*";
+            }
+            putch(i[k]);
+            SetConsoleTextAttribute(hConOut, 0 | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
         }
-        else {
-            std::cout << " 不存在该字母" << std::endl;
-        }
+        std::cout << std::endl;
     }
+    if (guessWord.size() == 0) {
+        std::cout << " 空空如也" << std::endl;
+    }
+    std::cout << "---------" << std::endl;
+#endif
+#ifdef linux
+    system("clear");
+    std::cout << "单词长度 " << keyWord.size() << std::endl;
+    std::cout << "历史查询: " << std::endl;
+    for (std::string i : guessWord) {
+        for (int k = 0; k < (int)i.size(); k += 2) {
+            if (i[k + 1] == '+') {
+                std::cout << "\033[42m";
+                std::cout << "\033[37m";
+            }
+            else if (i[k + 1] == '?') {
+                std::cout << "\033[41m";
+                std::cout << "\033[37m";
+            }
+            else {
+                std::cout << "\033[100m";
+                std::cout << "\033[37m";
+            }
+            std::cout << i[k];
+            std::cout << "\033[0m";
+        }
+        std::cout << std::endl;
+    }
+    if (guessWord.size() == 0) {
+        std::cout << " 空空如也" << std::endl;
+    }
+    std::cout << "---------" << std::endl;
+#endif
 }
 
+std::set<std::string> dictionary;
 int main()
 {
 #ifdef _WIN32
     system("CHCP 65001");
     system("cls");
+    hConIn = GetStdHandle(STD_INPUT_HANDLE);
+    hConOut = GetStdHandle(STD_OUTPUT_HANDLE);
 #endif
     network::networkLoadAPI();
     while (!exitFlg) {
@@ -402,6 +388,13 @@ int main()
         }
         if (state == 1) {
             // 客户端
+            {
+                std::ifstream fin("GuessDictionary.txt");
+                std::string s;
+                while (fin >> s) {
+                    dictionary.insert(s);
+                }
+            }
             std::cout << "加入已经开始的对局" << std::endl;
             std::cout << "请输入庄家给出的IP地址+端口 (例: xxx.xxx.xxx.xxx xxxxx)" << std::endl;
             std::cout << "如果你不知道具体情况 请不要使用 1000 以内的端口" << std::endl;
@@ -417,6 +410,7 @@ int main()
             std::string localAddr;
             GetLocalIP(localAddr);
             std::string postMsg = "[J] " + localAddr;
+            std::vector<std::string>().swap(guessWord);
             keyWord = "";
             while (net.networkClientSendStr(postMsg.c_str(), postMsg.size()) == -1) {
             }
@@ -430,16 +424,13 @@ int main()
             std::cout << "Wordle 长度 " << keyWord.size() << std::endl;
             std::cout << "按下任意键以开始输入" << std::endl;
             winFlg = 0;
-            int nowTime = clock();
-            int lstRefreshTime = nowTime;
-            double refreshPerSec = 0.3;
             clientDisplay();
             while (!winFlg) {
-                nowTime = clock();
                 if (keyPressed()) {
                     skipKey();
                     std::string guess = "";
-                    while (guess.size() != keyWord.size()) {
+                    // FIXME: 这里太丑了
+                    while (1) {
                         std::cout << "输入-跳过" << std::endl;
                         std::cout << "输入=刷新" << std::endl;
                         std::cout << "其他输入 进行查询" << std::endl;
@@ -454,12 +445,26 @@ int main()
                         if (guess.size() != keyWord.size()) {
                             std::cout << "单词长度必须为 " << keyWord.size() << std::endl;
                         }
+                        if (!dictionary.count(guess)) {
+                            std::cout << "无法识别输入单词" << std::endl;
+                            continue;
+                        }
+                        if (guess.size() == keyWord.size()) {
+                            break;
+                        }
                     }
                     if (guess == "-") {
                         std::cout << "什么事都没有发生" << std::endl;
                     }
                     else if (guess == "=") {
-                        std::cout << "当前信息" << std::endl;
+                        if (net.networkClientConnect() == -1) {
+                            break;
+                        }
+                        net.networkClientSendStr("[R] ", 4);
+                        int recvState = 0;
+                        while (recvState != 4 && !winFlg) {
+                            recvState = clientProcess(net);
+                        }
                         clientDisplay();
                     }
                     else {
@@ -467,7 +472,6 @@ int main()
                             if (guess[i] >= 'a' && guess[i] <= 'z') {
                                 guess[i] -= 32;
                             }
-                            unused[guess[i] - 'A'] = 0;
                         }
                         guess = "[G] " + guess;
                         if (net.networkClientConnect() == -1) {
@@ -480,24 +484,10 @@ int main()
                         }
                         clientDisplay();
                     }
-                    std::cout << "---------" << std::endl;
-                }
-                else {
-                    if (nowTime - lstRefreshTime > CLOCKS_PER_SEC * 1.0 / refreshPerSec) {
-                        // std::cerr << "[D] 请求服务器刷新" << std::endl;
-                        if (net.networkClientConnect() == -1) {
-                            break;
-                        }
-                        net.networkClientSendStr("[R] ", 4);
-                        int recvState = 0;
-                        while (recvState != 4 && !winFlg) {
-                            recvState = clientProcess(net);
-                        }
-                        lstRefreshTime = nowTime;
-                    }
                 }
                 Sleep(100);
             }
+            // FIXME: 给出正确答案
             if (winFlg == 1) {
                 std::cout << "正确答案 " << keyWord << std::endl;
             }
@@ -507,6 +497,12 @@ int main()
         }
         else if (state == 2) {
             // 服务器
+            {
+                std::ifstream fin("GuessDictionary.txt");
+                std::string s;
+                while (fin >> s)
+                    dictionary.insert(s);
+            }
             std::string addr;
             int port = 25565;
             GetLocalIP(addr);
@@ -521,21 +517,33 @@ int main()
             net.addr = addr.c_str();
             net.port = port;
             winFlg = 0;
+            std::vector<std::string>().swap(guessWord);
             std::cout << "对局开始" << std::endl;
-            // std::cout << "是否使用随机关键字 [Y/n]:" << std::endl;
-            // std::cin >> isRandomKeyWord;
-            std::cout << "请给出关键词(仅支持纯英文,不区分大小写):" << std::endl;
-            std::cout << "> ";
-            std::cin >> keyWord;
+            while (1) {
+                std::cout << "请给出关键词(仅支持纯英文,不区分大小写,输入/random由系统随机生成):" << std::endl;
+                std::cout << "> ";
+                std::cin >> keyWord;
+                if (keyWord == "/random") {
+                    std::vector<std::string> v;
+                    for (auto i : dictionary) {
+                        v.push_back(i);
+                    }
+                    std::mt19937 gen(std::chrono::system_clock::now().time_since_epoch().count());
+                    keyWord = v[gen() % v.size()];
+                    std::cout << "答案单词为:" << keyWord << std::endl;
+                    break;
+                }
+                else if (dictionary.count(keyWord)) {
+                    break;
+                }
+                else {
+                    std::cout << "关键词不合法,请重新输入." << std::endl;
+                }
+            }
             for (int i = 0; i < (int)keyWord.size(); ++i) {
                 if (keyWord[i] >= 'a' && keyWord[i] <= 'z') {
                     keyWord[i] -= 32;
                 }
-            }
-            for (int i = 0; i < 27; ++i) {
-                wrongPosition[i].clear();
-                acceptedPosition[i].clear();
-                unused[i] = 1;
             }
             while (!winFlg) {
                 std::cout << "等待客户端数据..." << std::endl;
