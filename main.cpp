@@ -6,12 +6,15 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <fstream>
 #include <iostream>
 #include <map>
+#include <random>
 #include <set>
 #include <string>
 #include <vector>
@@ -365,6 +368,7 @@ void clientDisplay()
 #endif
 }
 
+std::set<std::string> dictionary;
 int main()
 {
 #ifdef _WIN32
@@ -383,6 +387,13 @@ int main()
         }
         if (state == 1) {
             // 客户端
+            {
+                std::ifstream fin("GuessDictionary.txt");
+                std::string s;
+                while (fin >> s) {
+                    dictionary.insert(s);
+                }
+            }
             std::cout << "加入已经开始的对局" << std::endl;
             std::cout << "请输入庄家给出的IP地址+端口 (例: xxx.xxx.xxx.xxx xxxxx)" << std::endl;
             std::cout << "如果你不知道具体情况 请不要使用 1000 以内的端口" << std::endl;
@@ -417,7 +428,7 @@ int main()
                 if (keyPressed()) {
                     skipKey();
                     std::string guess = "";
-                    while (guess.size() != keyWord.size()) {
+                    while (1) {
                         std::cout << "输入-跳过" << std::endl;
                         std::cout << "输入=刷新" << std::endl;
                         std::cout << "其他输入 进行查询" << std::endl;
@@ -431,6 +442,12 @@ int main()
                         }
                         if (guess.size() != keyWord.size()) {
                             std::cout << "单词长度必须为 " << keyWord.size() << std::endl;
+                        }
+                        if (!dictionary.count(guess)) {
+                            std::cout << "无法识别输入单词" << std::endl;
+                        }
+                        if (guess.size() == keyWord.size()) {
+                            break;
                         }
                     }
                     if (guess == "-") {
@@ -476,6 +493,12 @@ int main()
         }
         else if (state == 2) {
             // 服务器
+            {
+                std::ifstream fin("GuessDictionary.txt");
+                std::string s;
+                while (fin >> s)
+                    dictionary.insert(s);
+            }
             std::string addr;
             int port = 25565;
             GetLocalIP(addr);
@@ -492,11 +515,27 @@ int main()
             winFlg = 0;
             std::vector<std::string>().swap(guessWord);
             std::cout << "对局开始" << std::endl;
-            // std::cout << "是否使用随机关键字 [Y/n]:" << std::endl;
-            // std::cin >> isRandomKeyWord;
-            std::cout << "请给出关键词(仅支持纯英文,不区分大小写):" << std::endl;
-            std::cout << "> ";
-            std::cin >> keyWord;
+            while (1) {
+                std::cout << "请给出关键词(仅支持纯英文,不区分大小写,输入/random由系统随机生成):" << std::endl;
+                std::cout << "> ";
+                std::cin >> keyWord;
+                if (keyWord == "/random") {
+                    std::vector<std::string> v;
+                    for (auto i : dictionary) {
+                        v.push_back(i);
+                    }
+                    std::mt19937 gen(std::chrono::system_clock::now().time_since_epoch().count());
+                    keyWord = v[gen() % v.size()];
+                    std::cout << "答案单词为:" << keyWord << std::endl;
+                    break;
+                }
+                else if (dictionary.count(keyWord)) {
+                    break;
+                }
+                else {
+                    std::cout << "关键词不合法,请重新输入." << std::endl;
+                }
+            }
             for (int i = 0; i < (int)keyWord.size(); ++i) {
                 if (keyWord[i] >= 'a' && keyWord[i] <= 'z') {
                     keyWord[i] -= 32;
