@@ -157,6 +157,7 @@ int clientProcessData(const char *data, int len)
     }
     else if (data[0] == '[' && data[1] == 'N' && data[2] == ']') {
         winFlg = 1;
+        keyWord = std::string(data + 3);
         return 4;
     }
     else {
@@ -486,6 +487,7 @@ int main()
                 }
                 Sleep(100);
             }
+            // FIXME: 给出正确答案
             if (winFlg == 1) {
                 std::cout << "正确答案 " << keyWord << std::endl;
             }
