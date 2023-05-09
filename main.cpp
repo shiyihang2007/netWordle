@@ -428,6 +428,7 @@ int main()
                 if (keyPressed()) {
                     skipKey();
                     std::string guess = "";
+                    // FIXME: 这里太丑了
                     while (1) {
                         std::cout << "输入-跳过" << std::endl;
                         std::cout << "输入=刷新" << std::endl;
@@ -445,6 +446,7 @@ int main()
                         }
                         if (!dictionary.count(guess)) {
                             std::cout << "无法识别输入单词" << std::endl;
+                            continue;
                         }
                         if (guess.size() == keyWord.size()) {
                             break;
