@@ -322,7 +322,7 @@ void clientDisplay()
                 // std::cerr << "+";
             }
             else if (i[k + 1] == '?') {
-                SetConsoleTextAttribute(hConOut, BACKGROUND_RED | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+                SetConsoleTextAttribute(hConOut, BACKGROUND_GREEN | BACKGROUND_RED | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
                 // std::cerr << "?";
             }
             else {
@@ -350,7 +350,7 @@ void clientDisplay()
                 std::cout << "\033[37m";
             }
             else if (i[k + 1] == '?') {
-                std::cout << "\033[41m";
+                std::cout << "\033[43m";
                 std::cout << "\033[37m";
             }
             else {
@@ -426,6 +426,7 @@ int main()
             winFlg = 0;
             clientDisplay();
             while (!winFlg) {
+                // TODO: 自动刷新
                 if (keyPressed()) {
                     skipKey();
                     std::string guess = "";
@@ -487,11 +488,11 @@ int main()
                 }
                 Sleep(100);
             }
-            // FIXME: 给出正确答案
             if (winFlg == 1) {
                 std::cout << "正确答案 " << keyWord << std::endl;
             }
             else {
+                // FIXME: 给出正确答案
                 std::cout << "有人已经猜到了正确答案!" << std::endl;
             }
         }
