@@ -1,5 +1,6 @@
 #ifndef UNICODE
 #define UNICODE
+#include <cctype>
 #endif
 #ifndef _UNICODE
 #define _UNICODE
@@ -127,6 +128,7 @@ void skipKey()
 std::string keyWord;
 int winFlg;
 std::vector<std::string> guessWord;
+bool appeared[26];
 
 int clientProcessData(const char *data, int len)
 {
@@ -140,6 +142,7 @@ int clientProcessData(const char *data, int len)
             tmp.erase(tmp.find('[', 4));
         }
         guessWord.push_back(tmp.substr(4));
+        for (auto i : tmp.substr(4)) appeared[i - 'A'] = true;
     }
     else if (data[0] == '[' && data[1] == 'E' && data[2] == ']') {
         // std::cerr << "[D] Data ended." << std::endl;
@@ -388,6 +391,7 @@ int main()
         }
         if (state == 1) {
             // 客户端
+            for (int i = 0; i < 26; i++) appeared[i] = false;
             {
                 std::ifstream fin("GuessDictionary.txt");
                 std::string s;
@@ -425,6 +429,10 @@ int main()
             std::cout << "按下任意键以开始输入" << std::endl;
             winFlg = 0;
             clientDisplay();
+
+            clock_t lstTime, nowTime;
+            const double refreshTime = 5.0;
+            lstTime = nowTime = clock();
             while (!winFlg) {
                 // TODO: 自动刷新
                 if (keyPressed()) {
@@ -434,21 +442,27 @@ int main()
                     while (1) {
                         std::cout << "输入-跳过" << std::endl;
                         std::cout << "输入=刷新" << std::endl;
+                        std::cout << "输入/remain查询未使用过的字母" << std::endl;
                         std::cout << "其他输入 进行查询" << std::endl;
                         std::cout << "> ";
                         std::cin >> guess;
+                        for (auto &i : guess)
+                            if (std::isupper(i)) i += 32;
                         if (guess == "-") {
                             break;
                         }
                         if (guess == "=") {
                             break;
                         }
-                        if (guess.size() != keyWord.size()) {
-                            std::cout << "单词长度必须为 " << keyWord.size() << std::endl;
+                        if (guess == "/remain") {
+                            break;
                         }
                         if (!dictionary.count(guess)) {
                             std::cout << "无法识别输入单词" << std::endl;
                             continue;
+                        }
+                        if (guess.size() != keyWord.size()) {
+                            std::cout << "单词长度必须为 " << keyWord.size() << std::endl;
                         }
                         if (guess.size() == keyWord.size()) {
                             break;
@@ -468,6 +482,13 @@ int main()
                         }
                         clientDisplay();
                     }
+                    else if (guess == "/remain") {
+                        std::cout << "未出现过的字母有: ";
+                        for (int i = 0; i < 26; i++)
+                            if (!appeared[i]) std::cout << char(i + 'A') << ' ';
+                        std::cout << std::endl;
+                        break;
+                    }
                     else {
                         for (int i = 0; i < (int)guess.size(); ++i) {
                             if (guess[i] >= 'a' && guess[i] <= 'z') {
@@ -486,6 +507,19 @@ int main()
                         clientDisplay();
                     }
                 }
+                nowTime = clock();
+                if (nowTime - lstTime > CLOCKS_PER_SEC * refreshTime) {
+                    lstTime = nowTime;
+                    if (net.networkClientConnect() == -1) {
+                        break;
+                    }
+                    net.networkClientSendStr("[R] ", 4);
+                    int recvState = 0;
+                    while (recvState != 4 && !winFlg) {
+                        recvState = clientProcess(net);
+                    }
+                    clientDisplay();
+                }
                 Sleep(100);
             }
             if (winFlg == 1) {
@@ -499,7 +533,7 @@ int main()
         else if (state == 2) {
             // 服务器
             {
-                std::ifstream fin("GuessDictionary.txt");
+                std::ifstream fin("AnswerDictionary.txt");
                 std::string s;
                 while (fin >> s)
                     dictionary.insert(s);
