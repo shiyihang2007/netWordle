@@ -425,6 +425,10 @@ int main()
             std::cout << "按下任意键以开始输入" << std::endl;
             winFlg = 0;
             clientDisplay();
+
+            clock_t lstTime, nowTime;
+            const double refreshTime = 5.0;
+            lstTime = nowTime = clock();
             while (!winFlg) {
                 // TODO: 自动刷新
                 if (keyPressed()) {
@@ -443,12 +447,12 @@ int main()
                         if (guess == "=") {
                             break;
                         }
-                        if (guess.size() != keyWord.size()) {
-                            std::cout << "单词长度必须为 " << keyWord.size() << std::endl;
-                        }
                         if (!dictionary.count(guess)) {
                             std::cout << "无法识别输入单词" << std::endl;
                             continue;
+                        }
+                        if (guess.size() != keyWord.size()) {
+                            std::cout << "单词长度必须为 " << keyWord.size() << std::endl;
                         }
                         if (guess.size() == keyWord.size()) {
                             break;
@@ -485,6 +489,19 @@ int main()
                         }
                         clientDisplay();
                     }
+                }
+                nowTime = clock();
+                if (nowTime - lstTime > CLOCKS_PER_SEC * refreshTime) {
+                    lstTime = nowTime;
+                    if (net.networkClientConnect() == -1) {
+                        break;
+                    }
+                    net.networkClientSendStr("[R] ", 4);
+                    int recvState = 0;
+                    while (recvState != 4 && !winFlg) {
+                        recvState = clientProcess(net);
+                    }
+                    clientDisplay();
                 }
                 Sleep(100);
             }
