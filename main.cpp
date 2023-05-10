@@ -484,10 +484,12 @@ int main()
                     }
                     else if (guess == "/remain") {
                         std::cout << "未出现过的字母有: ";
-                        for (int i = 0; i < 26; i++)
-                            if (!appeared[i]) std::cout << char(i + 'A') << ' ';
+                        for (int i = 0; i < 26; i++) {
+                            if (!appeared[i]) {
+                                std::cout << char(i + 'A') << ' ';
+                            }
+                        }
                         std::cout << std::endl;
-                        break;
                     }
                     else {
                         for (int i = 0; i < (int)guess.size(); ++i) {
