@@ -371,6 +371,12 @@ void clientDisplay()
     }
     std::cout << "---------" << std::endl;
 #endif
+    // 记录log
+    std::ofstream fout("netWordle.log", std::ios_base::out);
+    for (std::string i : guessWord) {
+        fout << i << std::endl;
+    }
+    fout.close();
 }
 
 std::set<std::string> dictionary;
@@ -491,7 +497,7 @@ int main()
                             }
                         }
                         std::cout << std::endl;
-                        lstTime = nowTime;
+                        lstTime = nowTime + CLOCKS_PER_SEC * 10;
                     }
                     else {
                         for (int i = 0; i < (int)guess.size(); ++i) {
@@ -512,7 +518,7 @@ int main()
                     }
                 }
                 nowTime = clock();
-                if (nowTime - lstTime > CLOCKS_PER_SEC * refreshTime) {
+                if (nowTime - (int)lstTime > CLOCKS_PER_SEC * refreshTime) {
                     lstTime = nowTime;
                     if (net.networkClientConnect() == -1) {
                         break;
