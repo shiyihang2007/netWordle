@@ -491,6 +491,7 @@ int main()
                             }
                         }
                         std::cout << std::endl;
+                        lstTime = nowTime;
                     }
                     else {
                         for (int i = 0; i < (int)guess.size(); ++i) {
