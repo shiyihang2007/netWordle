@@ -142,7 +142,8 @@ int clientProcessData(const char *data, int len)
             tmp.erase(tmp.find('[', 4));
         }
         guessWord.push_back(tmp.substr(4));
-        for (auto i : tmp.substr(4)) appeared[i - 'A'] = true;
+        for (auto i : tmp.substr(4))
+            if (isupper(i)) appeared[i - 'A'] = true;
     }
     else if (data[0] == '[' && data[1] == 'E' && data[2] == ']') {
         // std::cerr << "[D] Data ended." << std::endl;
